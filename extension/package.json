@@ -1,9 +1,9 @@
 {
-  "name": "telegram-vscode",
-  "displayName": "telegram-vscode",
-  "description": "Telegram for VSCode",
+  "name": "tgcode",
+  "displayName": "tgcode",
+  "description": "VSCode + telegram",
   "version": "1.2.2",
-  "publisher": "livingasync",
+  "publisher": "SatoruF",
   "icon": "assets/icon.png",
   "categories": [
     "Other"
@@ -12,10 +12,10 @@
     "vscode": "^1.91.0"
   },
   "activationEvents": [],
-  "main": "./src/extension.js",
+  "main": "./src/main.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/livingasync/telegram-vscode"
+    "url": "https://github.com/SatoruFF/tgcode.git"
   },
   "contributes": {
     "commands": [

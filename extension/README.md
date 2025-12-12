@@ -1,40 +1,38 @@
-## Features
+# **TGCode — Telegram inside Visual Studio Code**
 
-Telegram for VSCode
+TGCode allows you to use **Telegram Web directly inside VSCode** — in a dedicated tab or sidebar.  
+Perfect for developers who don't want to constantly switch between windows while working.
 
-## Usage
+---
 
-Use it from the sidebar
+## 🚀 Features
 
-or
+- 📌 Open **Telegram Web** inside VSCode
+- 🪟 Works in a **sidebar** or separate **editor tab**
+- 🔄 Built-in Go-based proxy (no external scripts required)
+- 🧹 Removes CSP and security headers for proper Telegram Web rendering
+- 📝 Dedicated output channel: **"TGCode"**
+- ⚡ Fast startup and stable connection
 
-Open Command Palette with `CTRL`+`SHIFT`+`P` or `F1` and type `Open Telegram in a Tab`
+---
 
-## Known Issues
-- No Audio playback
+## 📦 Installation
 
-Every feedback would be appreciated
-If you need help or have any question, feel free to ask at zangico@gmail.com
+1. Open **Visual Studio Code**
+2. Go to **Extensions** (`CTRL` + `SHIFT` + `X`)
+3. Search for **TGCode**
+4. Click **Install**
 
-## Release Notes
+---
 
-### 1.0.0
+## 🎯 Usage
 
-Initial release
+### **Option 1 — Command Palette**
 
-### 1.1.0
+`CTRL` + `SHIFT` + `P` →  
+Type: **Open Telegram in a Tab**
 
-Added sidebar feature
+### **Option 2 — Sidebar**
 
-### 1.2.0
-
-No need for external script running anymore
-
-### 1.2.1
-
-Added Output Channel 'Telegram-VSCode'
-Fixed BUG with proxy script not running...
-
-### 1.2.2
-
-Fix for the proxy script not running on macos
+A new icon **TGCode** will appear in the Activity Bar.  
+Click it to open Telegram.

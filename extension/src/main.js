@@ -5,9 +5,9 @@ const os = require('os');
 
 // Constants
 const PLATFORM_EXECUTABLES = {
-  win32: 'telegram-proxy-server-win.exe',
-  darwin: 'telegram-proxy-server-macos',
-  linux: 'telegram-proxy-server-linux'
+  win32: 'proxy-win.exe',
+  darwin: 'proxy-macos',
+  linux: 'proxy-linux'
 };
 
 const SERVER_PORT = 51837;

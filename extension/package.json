@@ -2,11 +2,18 @@
   "name": "tgcode",
   "displayName": "tgcode",
   "description": "VSCode + telegram",
-  "version": "1.2.2",
+  "version": "1.0.0",
   "publisher": "SatoruF",
   "icon": "assets/icon.png",
   "categories": [
     "Other"
+  ],
+  "files": [
+    "src/**",
+    "binaries/**",
+    "assets/**",
+    "package.json",
+    "README.md"
   ],
   "engines": {
     "vscode": "^1.91.0"

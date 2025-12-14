@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const { execFile } = require('child_process');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 
 // Constants
 const PLATFORM_EXECUTABLES = {
@@ -30,7 +31,23 @@ function getServerPath(context) {
     throw new Error(`Unsupported platform: ${platform}`);
   }
 
-  return path.join(context.extensionPath, 'binaries', executable);
+  const serverPath = path.join(context.extensionPath, 'binaries', executable);
+  
+  if (!fs.existsSync(serverPath)) {
+    throw new Error(`Server binary not found at: ${serverPath}`);
+  }
+  
+  // Set rights for unix like systems
+  if (platform !== 'win32') {
+    try {
+      fs.chmodSync(serverPath, 0o755);
+      logger.appendLine(`Set executable permission for: ${serverPath}`);
+    } catch (err) {
+      logger.appendLine(`Warning: Could not set executable permission: ${err.message}`);
+    }
+  }
+  
+  return serverPath;
 }
 
 /**
@@ -39,35 +56,48 @@ function getServerPath(context) {
  */
 function startServer(context) {
   return new Promise((resolve, reject) => {
-    const serverPath = getServerPath(context);
-    
-    logger.appendLine(`Starting server: ${serverPath}`);
-    
-    serverProcess = execFile(serverPath, (error, stdout, stderr) => {
-      if (error) {
-        logger.appendLine(`Error executing server: ${error.message}`);
-        if (stderr) {
-          logger.appendLine(`stderr: ${stderr}`);
+    try {
+      const serverPath = getServerPath(context);
+      
+      logger.appendLine(`Starting server: ${serverPath}`);
+      
+      serverProcess = execFile(serverPath, (error, stdout, stderr) => {
+        if (error) {
+          logger.appendLine(`Error executing server: ${error.message}`);
+          if (stderr) {
+            logger.appendLine(`stderr: ${stderr}`);
+          }
+          return;
         }
-        reject(error);
-        return;
-      }
-      
-      if (stdout) {
-        logger.appendLine(`Server output: ${stdout}`);
-      }
-      
-      resolve();
-    });
+        
+        if (stdout) {
+          logger.appendLine(`Server output: ${stdout}`);
+        }
+      });
 
-    // Handle server process events
-    serverProcess.on('error', (err) => {
-      logger.appendLine(`Server process error: ${err.message}`);
-    });
+      // Handle server process events
+      serverProcess.on('error', (err) => {
+        logger.appendLine(`Server process error: ${err.message}`);
+        reject(err);
+      });
 
-    serverProcess.on('exit', (code, signal) => {
-      logger.appendLine(`Server exited with code ${code} and signal ${signal}`);
-    });
+      serverProcess.on('exit', (code, signal) => {
+        logger.appendLine(`Server exited with code ${code} and signal ${signal}`);
+      });
+      
+      setTimeout(() => {
+        if (serverProcess && !serverProcess.killed) {
+          logger.appendLine('Server process started successfully');
+          resolve();
+        } else {
+          reject(new Error('Server process failed to start'));
+        }
+      }, 1000);
+      
+    } catch (error) {
+      logger.appendLine(`Failed to start server: ${error.message}`);
+      reject(error);
+    }
   });
 }
 

@@ -15,6 +15,9 @@ clean:
 logs:
 	docker logs -f $(shell docker ps -q --filter "ancestor=$(IMAGE_NAME)")
 
+macexe-cgo-off:
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o proxy-macos proxy.go
+
 oldmacexe:
 	GOOS=darwin GOARCH=amd64 go build -o proxy-macos proxy.go
 

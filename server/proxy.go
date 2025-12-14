@@ -14,26 +14,25 @@ import (
 
 func main() {
 	log.SetOutput(os.Stdout)
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	fmt.Println("=== Telegram Proxy Server ===")
 
 	e := echo.New()
 	e.HideBanner = true
-
-	// logs
+	
+	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-
-	// CORS middleware
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
-		AllowMethods: []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPatch, http.MethodPost, http.MethodDelete},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders: []string{"*"},
 	}))
 
 	targetURL, err := url.Parse("https://web.telegram.org/k/")
 	if err != nil {
-		log.Fatal("Failed to parse target URL:", err)
+		log.Fatal("ERROR: Failed to parse target URL:", err)
 	}
+	fmt.Println("Target URL:", targetURL.String())
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 	originalDirector := proxy.Director
@@ -43,34 +42,29 @@ func main() {
 		req.Header.Set("Origin", "https://web.telegram.org")
 		req.Header.Set("Referer", "https://web.telegram.org/k/")
 		req.Host = targetURL.Host
-		log.Printf("Proxying request: %s %s", req.Method, req.URL.Path)
 	}
 
 	proxy.ModifyResponse = func(resp *http.Response) error {
-		// Removing the headers that interfere with embedding in the iframe
-		headersToRemove := []string{
-			"X-Frame-Options",
-			"Frame-Options",
-			"Content-Security-Policy",
-			"Content-Security-Policy-Report-Only",
-			"Strict-Transport-Security",
-		}
-		for _, h := range headersToRemove {
-			resp.Header.Del(h)
-		}
-
-		// for ifreame
+		resp.Header.Del("X-Frame-Options")
+		resp.Header.Del("Content-Security-Policy")
+		resp.Header.Del("Content-Security-Policy-Report-Only")
+		resp.Header.Del("Strict-Transport-Security")
+		
 		resp.Header.Set("Access-Control-Allow-Origin", "*")
 		resp.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		resp.Header.Set("Access-Control-Allow-Headers", "*")
-
 		return nil
 	}
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("Proxy error: %v", err)
+		log.Printf("PROXY ERROR: %v for %s %s\n", err, r.Method, r.URL.Path)
 		http.Error(w, fmt.Sprintf("Proxy error: %v", err), http.StatusBadGateway)
 	}
+
+	// Health check
+	e.GET("/health", func(c echo.Context) error {
+		return c.String(http.StatusOK, "OK")
+	})
 
 	e.Any("/*", func(c echo.Context) error {
 		proxy.ServeHTTP(c.Response(), c.Request())
@@ -78,10 +72,10 @@ func main() {
 	})
 
 	port := ":51837"
-	log.Printf("Starting Telegram proxy server on http://localhost%s", port)
-	log.Println("Proxying requests to https://web.telegram.org/k/")
+	fmt.Printf("Starting server on http://localhost%s\n", port)
+	fmt.Println("Press Ctrl+C to stop")
 	
 	if err := e.Start(port); err != nil && err != http.ErrServerClosed {
-		log.Fatal("Server failed to start:", err)
+		log.Fatal("ERROR: Server failed:", err)
 	}
 }

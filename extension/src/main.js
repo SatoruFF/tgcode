@@ -22,24 +22,24 @@ let serverProcess;
  * @returns {string} Path to server executable
  * @throws {Error} If platform is unsupported
  */
-function getServerPath() {
+function getServerPath(context) {
   const platform = os.platform();
   const executable = PLATFORM_EXECUTABLES[platform];
-  
+
   if (!executable) {
     throw new Error(`Unsupported platform: ${platform}`);
   }
-  
-  return path.resolve(__dirname, 'binaries', executable);
+
+  return path.join(context.extensionPath, 'binaries', executable);
 }
 
 /**
  * Start the Telegram proxy server
  * @returns {Promise<void>}
  */
-function startServer() {
+function startServer(context) {
   return new Promise((resolve, reject) => {
-    const serverPath = getServerPath();
+    const serverPath = getServerPath(context);
     
     logger.appendLine(`Starting server: ${serverPath}`);
     
@@ -209,7 +209,7 @@ async function activate(context) {
 
   try {
     // Start the server
-    await startServer();
+    await startServer(context);
     logger.appendLine('Server started successfully');
   } catch (error) {
     vscode.window.showErrorMessage(

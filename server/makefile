@@ -20,7 +20,7 @@ oldmacexe:
 
 # Build individual binaries
 macexe:
-	GOOS=darwin GOARCH=arm64 go build -o proxy-macos proxy.go
+	CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 CC=clang go build -ldflags="-linkmode=external" -o proxy-macos proxy.go
 
 linexe:
 	GOOS=linux GOARCH=amd64 go build -o proxy-linux proxy.go

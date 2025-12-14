@@ -37,13 +37,13 @@ func main() {
 	}
 
 	e.Any("/*", func(c echo.Context) error {
-		req := c.Request()
-		res := c.Response()
-
-		proxy.ServeHTTP(res, req)
+		proxy.ServeHTTP(c.Response(), c.Request())
 		return nil
 	})
 
 	log.Println("Proxy server running at http://localhost:51837")
-	e.Logger.Fatal(e.Start(":51837"))
+
+	if err := e.Start(":51837"); err != nil && err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
 }

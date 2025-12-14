@@ -17,6 +17,9 @@ BIN_MAC=$(BINARY_DIR)/proxy-macos
 # Build everything
 all: check-vsce build-binaries package
 
+publish:
+	vsce package && vsce publish
+
 # Check if vsce is installed, install if not
 check-vsce:
 ifeq ($(VSCE),)

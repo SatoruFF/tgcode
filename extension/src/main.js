@@ -1,5 +1,5 @@
 const vscode = require('vscode');
-const { execFile } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -37,7 +37,6 @@ function getServerPath(context) {
     throw new Error(`Server binary not found at: ${serverPath}`);
   }
   
-  // Set rights for unix like systems
   if (platform !== 'win32') {
     try {
       fs.chmodSync(serverPath, 0o755);
@@ -61,38 +60,66 @@ function startServer(context) {
       
       logger.appendLine(`Starting server: ${serverPath}`);
       
-      serverProcess = execFile(serverPath, (error, stdout, stderr) => {
-        if (error) {
-          logger.appendLine(`Error executing server: ${error.message}`);
-          if (stderr) {
-            logger.appendLine(`stderr: ${stderr}`);
-          }
-          return;
-        }
+      serverProcess = spawn(serverPath, [], {
+        cwd: path.dirname(serverPath),
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      let serverStarted = false;
+
+      serverProcess.stdout.on('data', (data) => {
+        const output = data.toString();
+        logger.appendLine(`[SERVER] ${output}`);
         
-        if (stdout) {
-          logger.appendLine(`Server output: ${stdout}`);
+        if (output.includes('Starting') || output.includes('51837')) {
+          serverStarted = true;
+          logger.appendLine('Server is running on port 51837');
         }
       });
 
-      // Handle server process events
+      serverProcess.stderr.on('data', (data) => {
+        logger.appendLine(`[SERVER ERROR] ${data.toString()}`);
+      });
+
       serverProcess.on('error', (err) => {
         logger.appendLine(`Server process error: ${err.message}`);
-        reject(err);
+        if (!serverStarted) {
+          reject(err);
+        }
       });
 
       serverProcess.on('exit', (code, signal) => {
         logger.appendLine(`Server exited with code ${code} and signal ${signal}`);
+        if (code !== 0 && !serverStarted) {
+          reject(new Error(`Server exited with code ${code}`));
+        }
       });
       
       setTimeout(() => {
         if (serverProcess && !serverProcess.killed) {
-          logger.appendLine('Server process started successfully');
-          resolve();
+          logger.appendLine('Server process is running, attempting to verify connection...');
+          
+          const http = require('http');
+          const req = http.get(`http://localhost:${SERVER_PORT}`, (res) => {
+            logger.appendLine(`Server responded with status: ${res.statusCode}`);
+            resolve();
+          });
+          
+          req.on('error', (err) => {
+            logger.appendLine(`Could not connect to server: ${err.message}`);
+            logger.appendLine('Server process is running but may not be listening yet. Continuing anyway...');
+            resolve();
+          });
+          
+          req.setTimeout(2000, () => {
+            req.destroy();
+            logger.appendLine('Connection check timeout, but server process is running');
+            resolve();
+          });
         } else {
           reject(new Error('Server process failed to start'));
         }
-      }, 1000);
+      }, 3000);
       
     } catch (error) {
       logger.appendLine(`Failed to start server: ${error.message}`);
@@ -123,7 +150,7 @@ function getWebviewContent() {
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http://localhost:${SERVER_PORT}; script-src 'unsafe-inline';">
+      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src http://localhost:${SERVER_PORT}; script-src 'unsafe-inline'; style-src 'unsafe-inline';">
       <title>Telegram Web</title>
       <style>
         body, html {
@@ -132,6 +159,7 @@ function getWebviewContent() {
           height: 100%;
           width: 100%;
           overflow: hidden;
+          background: #17212b;
         }
         iframe {
           border: none;
@@ -145,39 +173,97 @@ function getWebviewContent() {
           left: 50%;
           transform: translate(-50%, -50%);
           font-family: system-ui, -apple-system, sans-serif;
-          color: #666;
+          color: #fff;
+          text-align: center;
+        }
+        .spinner {
+          border: 3px solid rgba(255, 255, 255, 0.3);
+          border-radius: 50%;
+          border-top: 3px solid #fff;
+          width: 40px;
+          height: 40px;
+          animation: spin 1s linear infinite;
+          margin: 0 auto 20px;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .error {
+          color: #ff6b6b;
         }
       </style>
     </head>
     <body>
-      <div class="loading" id="loading">Loading Telegram...</div>
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div>Loading Telegram...</div>
+        <div style="font-size: 12px; margin-top: 10px; opacity: 0.7;">Connecting to localhost:${SERVER_PORT}</div>
+      </div>
       <iframe 
         src="http://localhost:${SERVER_PORT}" 
         id="telegram-frame"
         allow="microphone; camera"
-        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
+        style="display: none;"
       ></iframe>
       <script>
         (function() {
           const vscode = acquireVsCodeApi();
           const iframe = document.getElementById('telegram-frame');
           const loading = document.getElementById('loading');
+          let retryCount = 0;
+          const maxRetries = 5;
+
+          function showError(message) {
+            loading.innerHTML = \`
+              <div class="error">
+                <div style="font-size: 24px; margin-bottom: 10px;">⚠️</div>
+                <div>\${message}</div>
+                <div style="font-size: 12px; margin-top: 10px;">Check the Output panel (Telegram-VSCode) for details</div>
+              </div>
+            \`;
+          }
+
+          function retryLoad() {
+            if (retryCount < maxRetries) {
+              retryCount++;
+              loading.querySelector('div:last-child').textContent = 
+                \`Retry attempt \${retryCount}/\${maxRetries}...\`;
+              
+              setTimeout(() => {
+                iframe.src = iframe.src + '?retry=' + retryCount;
+              }, 2000);
+            } else {
+              showError('Failed to connect to Telegram proxy server after ' + maxRetries + ' attempts');
+            }
+          }
 
           iframe.addEventListener('load', () => {
+            console.log('Iframe loaded successfully');
             loading.style.display = 'none';
+            iframe.style.display = 'block';
             vscode.postMessage({ 
               type: 'iframe-loaded',
               timestamp: Date.now()
             });
           });
 
-          iframe.addEventListener('error', () => {
-            loading.textContent = 'Failed to load Telegram. Please check if the server is running.';
-            loading.style.color = '#f00';
+          iframe.addEventListener('error', (e) => {
+            console.error('Iframe error:', e);
+            retryLoad();
           });
 
+          // Check load from timeout
+          setTimeout(() => {
+            if (loading.style.display !== 'none') {
+              console.log('Timeout waiting for iframe to load');
+              retryLoad();
+            }
+          }, 10000);
+
           window.addEventListener('message', (event) => {
-            console.log('Received message from extension:', event.data);
+            console.log('Received message:', event.data);
           });
         })();
       </script>
@@ -209,6 +295,7 @@ function createTelegramPanel() {
       switch (message.type) {
         case 'iframe-loaded':
           logger.appendLine('Telegram iframe loaded successfully');
+          vscode.window.showInformationMessage('Telegram loaded successfully!');
           break;
         default:
           logger.appendLine(`Unknown message type: ${message.type}`);
@@ -235,17 +322,24 @@ function createTelegramPanel() {
  */
 async function activate(context) {
   logger = vscode.window.createOutputChannel('Telegram-VSCode');
+  logger.show();
+  logger.appendLine('='.repeat(50));
   logger.appendLine('Telegram VSCode extension activated');
+  logger.appendLine(`Platform: ${os.platform()}`);
+  logger.appendLine(`Extension path: ${context.extensionPath}`);
+  logger.appendLine('='.repeat(50));
 
   try {
     // Start the server
     await startServer(context);
-    logger.appendLine('Server started successfully');
+    logger.appendLine('✓ Server started successfully');
+    vscode.window.showInformationMessage('Telegram proxy server started');
   } catch (error) {
-    vscode.window.showErrorMessage(
-      `Failed to start Telegram proxy server: ${error.message}`
-    );
-    logger.appendLine(`Server startup failed: ${error.message}`);
+    const errorMsg = `Failed to start Telegram proxy server: ${error.message}`;
+    vscode.window.showErrorMessage(errorMsg);
+    logger.appendLine(`✗ ${errorMsg}`);
+    logger.appendLine('Stack trace:');
+    logger.appendLine(error.stack || 'No stack trace available');
   }
 
   // Register command to open Telegram in a tab
@@ -253,6 +347,7 @@ async function activate(context) {
     COMMAND_ID,
     () => {
       try {
+        logger.appendLine('Opening Telegram panel...');
         createTelegramPanel();
       } catch (error) {
         vscode.window.showErrorMessage(
@@ -268,6 +363,8 @@ async function activate(context) {
     WEBVIEW_ID,
     {
       resolveWebviewView(webviewView) {
+        logger.appendLine('Resolving sidebar webview...');
+        
         webviewView.webview.options = {
           enableScripts: true,
           localResourceRoots: []
@@ -306,6 +403,7 @@ async function activate(context) {
  * Deactivate the extension
  */
 function deactivate() {
+  logger.appendLine('Deactivating extension...');
   stopServer();
   if (logger) {
     logger.appendLine('Telegram VSCode extension deactivated');
